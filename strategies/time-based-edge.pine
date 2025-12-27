@@ -1,0 +1,78 @@
+//@version=6
+strategy("Time-Based Edge Strategy", initial_capital=1000, overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.1)
+
+// Strategy Parameters
+tradingHour1 = input.int(17, "Trading Hour 1 (UTC)", minval=0, maxval=23)
+tradingHour2 = input.int(21, "Trading Hour 2 (UTC)", minval=0, maxval=23)
+tradingHour3 = input.int(22, "Trading Hour 3 (UTC)", minval=0, maxval=23)
+
+profitTargetPct = input.float(0.8, "Profit Target %", minval=0.1, maxval=5.0, step=0.1)
+stopLossPct = input.float(0.5, "Stop Loss %", minval=0.1, maxval=3.0, step=0.1)
+
+useLongOnly = input.bool(true, "Long Trades Only")
+useShortOnly = input.bool(false, "Short Trades Only")
+
+// Calculate 1h candles if data is on lower timeframe
+hour_open = request.security(syminfo.tickerid, "60", open[1], barmerge.gaps_on, barmerge.lookahead_off)
+hour_high = request.security(syminfo.tickerid, "60", high[1], barmerge.gaps_on, barmerge.lookahead_off)
+hour_low = request.security(syminfo.tickerid, "60", low[1], barmerge.gaps_on, barmerge.lookahead_off)
+hour_close = request.security(syminfo.tickerid, "60", close[1], barmerge.gaps_on, barmerge.lookahead_off)
+hour_volume = request.security(syminfo.tickerid, "60", volume[1], barmerge.gaps_on, barmerge.lookahead_off)
+
+// Get current hour in UTC
+currentHour = hour(time, "GMT")
+
+// Check if current hour is a trading hour
+isTradingHour = currentHour == tradingHour1 or currentHour == tradingHour2 or currentHour == tradingHour3
+
+// Calculate average volume (20 periods)
+avgVolume = ta.sma(hour_volume, 20)
+
+// Entry Conditions: Close previous hour green with above-average volume
+prevHourGreen = hour_open < hour_close
+prevHourHighVolume = hour_volume > avgVolume
+hourlyUpTrend = hour_close > hour_open and hour_close > ta.sma(hour_close, 5)
+
+// Combined entry signal
+entryCondition = isTradingHour and prevHourGreen and prevHourHighVolume
+
+// Exit Conditions
+targetPrice = strategy.position_avg_price * (1 + profitTargetPct / 100)
+stopPrice = strategy.position_avg_price * (1 - stopLossPct / 100)
+
+isTradingHourEnd = currentHour != currentHour[1]
+notInProfitablePosition = strategy.position_size > 0 and close < strategy.position_avg_price
+
+// Exit at hour end if not profitable
+exitAtHourEnd = isTradingHourEnd and notInProfitablePosition
+
+// Entry
+if entryCondition and useLongOnly and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if entryCondition and useShortOnly and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+
+// Exits
+if strategy.position_size > 0
+    if useLongOnly
+        strategy.exit("Target/Stop", "Long", limit=targetPrice, stop=stopPrice)
+        if exitAtHourEnd
+            strategy.close("Long", comment="Hour End")
+
+    if useShortOnly
+        targetPriceShort = strategy.position_avg_price * (1 - profitTargetPct / 100)
+        stopPriceShort = strategy.position_avg_price * (1 + stopLossPct / 100)
+        strategy.exit("Target/Stop", "Short", limit=targetPriceShort, stop=stopPriceShort)
+        if exitAtHourEnd
+            strategy.close("Short", comment="Hour End")
+
+// Plotting
+bgcolor(isTradingHour ? color.new(color.green, 90) : na, title="Trading Hour Zone")
+
+plot(targetPrice, "Target", color=color.green, style=plot.style_linebr)
+plot(stopPrice, "Stop Loss", color=color.red, style=plot.style_linebr)
+
+// Entry markers
+plotshape(entryCondition and useLongOnly and strategy.position_size == 0, "Buy Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(entryCondition and useShortOnly and strategy.position_size == 0, "Sell Signal", shape.triangledown, location.abovebar, color.red, size=size.small)

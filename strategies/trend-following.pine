@@ -1,0 +1,171 @@
+//@version=6
+// STRATEGY: Trend Following 4H + Pullback
+// DESCRIPTION: Uses 4H EMA200 for trend direction and EMA50 for pullback entries
+// TIMEFRAME: Apply to 1H chart (uses 4H data internally)
+// BASED ON: BTCUSDT analytics showing strong 2-year uptrend (+96%)
+//
+// LOGIC:
+// - Long: Price > EMA200(4H) AND price pulls back to EMA50(4H) AND reversal candle
+// - Short: Price < EMA200(4H) AND price pulls back to EMA50(4H) AND reversal candle
+//
+// RISK MANAGEMENT:
+// - Stop Loss: 1.5% (configurable)
+// - Take Profit: 2.5% (configurable, ~1:1.67 R:R)
+// - Position Size: 10% of equity (configurable)
+//
+// CONFIRMATIONS (optional):
+// - Volume > 1.2x average
+// - RSI < 70 (long) or > 30 (short)
+//
+// EXIT CONDITIONS:
+// - Stop loss hit
+// - Take profit hit
+// - Trend change (price crosses EMA200)
+
+strategy("Trend Following 4H + Pullback", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// === INPUTS ===
+// Higher timeframe (4H)
+higherTimeframe = input.timeframe("240", "Higher Timeframe")
+
+// EMA periods
+ema200Period = input.int(200, "EMA 200 Period (Trend)", minval=1)
+ema50Period = input.int(50, "EMA 50 Period (Pullback)", minval=1)
+
+// Risk management
+riskPercent = input.float(1.5, "Stop Loss %", minval=0.1, maxval=10.0) / 100
+rewardPercent = input.float(2.5, "Take Profit %", minval=0.5, maxval=20.0) / 100
+
+// Pullback threshold
+pullbackThreshold = input.float(0.5, "Pullback to EMA50 Threshold %", minval=0.1, maxval=2.0) / 100
+
+// Confirmations
+useVolumeConfirm = input.bool(true, "Use Volume Confirmation")
+volumeMultiplier = input.float(1.2, "Volume Multiplier", minval=1.0, maxval=3.0)
+
+useRSI = input.bool(true, "Use RSI Filter")
+rsiPeriod = input.int(14, "RSI Period")
+rsiOversold = input.int(30, "RSI Oversold")
+rsiOverbought = input.int(70, "RSI Overbought")
+
+// === HIGHER TIMEFRAME DATA ===
+// Get 4H data without lookahead for accurate historical testing
+ema200HT = request.security(syminfo.tickerid, higherTimeframe, ta.ema(close, ema200Period))
+ema50HT = request.security(syminfo.tickerid, higherTimeframe, ta.ema(close, ema50Period))
+
+// === INDICATORS ===
+// Current timeframe EMAs
+ema50 = ta.ema(close, ema50Period)
+
+// RSI
+rsi = ta.rsi(close, rsiPeriod)
+
+// Volume average
+volSMA = ta.sma(volume, 20)
+
+// === TREND DIRECTION ===
+bullishTrend = close > ema200HT
+bearishTrend = close < ema200HT
+
+// === PULLBACK DETECTION ===
+// Calculate distance to EMA50
+distanceToEMA50 = (ema50 - close) / close
+
+// Bullish pullback: Price pulls back toward or below EMA50 in uptrend
+bullishPullback = bullishTrend and close[1] > ema50HT[1] and close <= ema50 * (1 + pullbackThreshold)
+
+// Bearish pullback: Price pulls back toward or above EMA50 in downtrend
+bearishPullback = bearishTrend and close[1] < ema50HT[1] and close >= ema50 * (1 - pullbackThreshold)
+
+// === VOLUME CONFIRMATION ===
+volumeConfirm = useVolumeConfirm ? volume > volSMA * volumeMultiplier : true
+
+// === RSI FILTER ===
+rsiLongConfirm = useRSI ? rsi < rsiOverbought : true
+rsiShortConfirm = useRSI ? rsi > rsiOversold : true
+
+// === ENTRY CONDITIONS ===
+// Long entry: Bullish trend + pullback to EMA50 + reversal candle
+longCondition = bullishTrend and bullishPullback and close > open and volumeConfirm and rsiLongConfirm
+
+// Short entry: Bearish trend + pullback to EMA50 + reversal candle
+shortCondition = bearishTrend and bearishPullback and close < open and volumeConfirm and rsiShortConfirm
+
+// === EXIT CONDITIONS ===
+// Stop loss and take profit levels
+longSL = close * (1 - riskPercent)
+longTP = close * (1 + rewardPercent)
+
+shortSL = close * (1 + riskPercent)
+shortTP = close * (1 - rewardPercent)
+
+// Trend change exit
+longTrendExit = not bullishTrend
+shortTrendExit = not bearishTrend
+
+// === STRATEGY EXECUTION ===
+// Long entry
+if longCondition and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+// Short entry
+if shortCondition and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+
+// Stop loss and take profit
+if strategy.position_size > 0
+    strategy.exit("Long SL/TP", "Long", stop=longSL, limit=longTP)
+    if longTrendExit
+        strategy.close("Long", comment="Trend Change")
+
+if strategy.position_size < 0
+    strategy.exit("Short SL/TP", "Short", stop=shortSL, limit=shortTP)
+    if shortTrendExit
+        strategy.close("Short", comment="Trend Change")
+
+// === PLOTTING ===
+// Plot EMAs
+plot(ema50, color=color.new(color.blue, 0), linewidth=2, title="EMA 50")
+plot(ema200HT, color=color.new(color.orange, 0), linewidth=2, title="EMA 200 (4H)")
+
+// Plot higher timeframe EMA200 on current chart
+plot(ema50HT, color=color.new(color.purple, 0), linewidth=1, title="EMA 50 (4H)", style=plot.style_circles)
+
+// Plot signals
+plotshape(longCondition, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.small, title="Long Signal")
+plotshape(shortCondition, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.small, title="Short Signal")
+
+// Plot background for trend
+bgcolor(bullishTrend ? color.new(color.green, 95) : bearishTrend ? color.new(color.red, 95) : na, title="Trend Background")
+
+// === INFO TABLE ===
+var table infoTable = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 80), border_width=1)
+
+if barstate.islast
+    table.cell(infoTable, 0, 0, "Trend", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, bullishTrend ? "BULLISH" : "BEARISH", text_color=bullishTrend ? color.green : color.red, text_size=size.small)
+    
+    table.cell(infoTable, 0, 1, "Price", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 1, str.tostring(close, "#.##"), text_color=color.white, text_size=size.small)
+    
+    table.cell(infoTable, 0, 2, "EMA 200 (4H)", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(ema200HT, "#.##"), text_color=color.orange, text_size=size.small)
+    
+    table.cell(infoTable, 0, 3, "EMA 50", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 3, str.tostring(ema50, "#.##"), text_color=color.blue, text_size=size.small)
+    
+    table.cell(infoTable, 0, 4, "RSI", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 4, str.tostring(rsi, "#.#"), text_color=rsi > 70 ? color.red : rsi < 30 ? color.green : color.white, text_size=size.small)
+    
+    table.cell(infoTable, 0, 5, "Volume", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 5, useVolumeConfirm ? (volume > volSMA * volumeMultiplier ? "HIGH" : "LOW") : "N/A", text_color=volume > volSMA * volumeMultiplier ? color.green : color.red, text_size=size.small)
+    
+    table.cell(infoTable, 0, 6, "Distance to EMA50", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 6, str.tostring(distanceToEMA50 * 100, "#.##") + "%", text_color=color.white, text_size=size.small)
+    
+    table.cell(infoTable, 0, 7, "Position", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 7, strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT", text_color=strategy.position_size > 0 ? color.green : strategy.position_size < 0 ? color.red : color.gray, text_size=size.small)
+
+// === ALERTS ===
+alertcondition(longCondition, title="Long Entry Signal", message="Trend Following: LONG entry signal on {{ticker}}")
+alertcondition(shortCondition, title="Short Entry Signal", message="Trend Following: SHORT entry signal on {{ticker}}")

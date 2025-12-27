@@ -1,0 +1,117 @@
+//@version=6
+strategy("Volatility Regime Trading Strategy", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.1)
+
+// === INPUTS ===
+atrLength = input.int(24, "ATR Period (hours)", minval=1, tooltip="ATR calculation period")
+lowVolThreshold = input.float(0.4, "Low Volatility Threshold (%)", minval=0.1, maxval=1.0, step=0.1, tooltip="ATR below this indicates low volatility")
+highVolThreshold = input.float(1.0, "High Volatility Threshold (%)", minval=0.5, maxval=2.0, step=0.1, tooltip="ATR above this indicates high volatility")
+lowVolConsecutive = input.int(4, "Consecutive Low Vol Periods", minval=1, maxval=10, tooltip="Number of consecutive low vol periods before entering breakout mode")
+breakoutPeriods = input.int(20, "Breakout Periods", minval=5, maxval=50, tooltip="Number of periods for breakout high/low calculation")
+riskRewardRatio = input.float(1.5, "Risk/Reward Ratio", minval=1.0, maxval=3.0, step=0.1, tooltip="Target is RRR times stop-loss distance")
+atrMultiplierSL = input.float(0.5, "ATR Multiplier for Stop-Loss", minval=0.3, maxval=1.0, step=0.1, tooltip="Stop-loss distance = ATR * this multiplier")
+
+// Colors
+colorLowVol = input.color(color.new(color.green, 90), "Low Volatility Background Color")
+colorHighVol = input.color(color.new(color.red, 90), "High Volatility Background Color")
+colorNeutral = input.color(color.new(color.blue, 95), "Neutral Volatility Background Color")
+
+// === INDICATORS ===
+
+// ATR Calculation (percentage-based)
+atr = ta.atr(atrLength) / close * 100
+
+// Rolling volatility for trend identification
+volatilityMA = ta.sma(atr, 24)
+
+// Regime Detection
+isLowVol = atr < lowVolThreshold
+isHighVol = atr > highVolThreshold
+isNeutralVol = not isLowVol and not isHighVol
+
+// Consecutive low volatility periods
+lowVolCount = ta.barssince(not isLowVol)
+isLowVolRegime = isLowVol and lowVolCount >= lowVolConsecutive
+
+// Breakout Levels (donchian-style)
+highestHigh = ta.highest(high, breakoutPeriods)
+lowestLow = ta.lowest(low, breakoutPeriods)
+
+// Trend Direction (for high volatility regime)
+emaShort = ta.ema(close, 12)
+emaLong = ta.ema(close, 26)
+isBullish = emaShort > emaLong
+isBearish = emaShort < emaLong
+
+// Momentum Confirmation (RSI)
+rsiValue = ta.rsi(close, 14)
+isOverbought = rsiValue > 70
+isOversold = rsiValue < 30
+
+// Volume Confirmation
+avgVolume = ta.sma(volume, 20)
+isHighVolume = volume > avgVolume * 1.5
+
+// === TRADING LOGIC ===
+
+// Entry Conditions
+longConditionLowVol = isLowVolRegime and close > highestHigh[1] and isHighVolume
+shortConditionLowVol = isLowVolRegime and close < lowestLow[1] and isHighVolume
+
+longConditionHighVol = isHighVol and isBullish and close > ta.ema(close, 50) and ta.crossover(emaShort, emaLong)
+shortConditionHighVol = isHighVol and isBearish and close < ta.ema(close, 50) and ta.crossunder(emaShort, emaLong)
+
+// Stop Loss and Take Profit Calculation
+atrStopDistance = atr * atrMultiplierSL / 100
+
+// Long Entry
+if longConditionLowVol or longConditionHighVol
+    stopLossPrice = close - atrStopDistance
+    takeProfitPrice = close + (atrStopDistance * riskRewardRatio)
+    
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Exit Long", "Long", stop=stopLossPrice, limit=takeProfitPrice)
+
+// Short Entry
+if shortConditionLowVol or shortConditionHighVol
+    stopLossPrice = close + atrStopDistance
+    takeProfitPrice = close - (atrStopDistance * riskRewardRatio)
+    
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Exit Short", "Short", stop=stopLossPrice, limit=takeProfitPrice)
+
+// === EXIT CONDITIONS (Time-based) ===
+
+// Exit if volatility changes drastically
+if strategy.position_size > 0 and isNeutralVol
+    strategy.close("Long", comment="Volatility Change")
+
+if strategy.position_size < 0 and isNeutralVol
+    strategy.close("Short", comment="Volatility Change")
+
+// === VISUALIZATION ===
+
+// Volatility Regime Background
+bgcolor(isLowVolRegime ? colorLowVol : isHighVol ? colorHighVol : colorNeutral, title="Volatility Regime")
+
+// ATR Line (in separate pane)
+plot(atr, "ATR %", color=color.purple, linewidth=2, display=display.none)
+hline(lowVolThreshold, "Low Vol Threshold", color=color.green, linestyle=hline.style_dashed, display=display.none)
+hline(highVolThreshold, "High Vol Threshold", color=color.red, linestyle=hline.style_dashed, display=display.none)
+
+// Breakout Levels
+plot(highestHigh, "Highest High", color=color.green, linewidth=1, display=display.none)
+plot(lowestLow, "Lowest Low", color=color.red, linewidth=1, display=display.none)
+
+// EMAs for Trend
+plot(emaShort, "EMA 12", color=color.orange, linewidth=1)
+plot(emaLong, "EMA 26", color=color.blue, linewidth=1)
+
+// Entry Signals
+plotshape(longConditionLowVol or longConditionHighVol, "Long Signal", shape.triangleup, location.belowbar, color.lime, size=size.small, text="L")
+plotshape(shortConditionLowVol or shortConditionHighVol, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small, text="S")
+
+// Alert Conditions
+alertcondition(longConditionLowVol or longConditionHighVol, "Long Entry", "Volatility Regime: Long Entry Signal")
+alertcondition(shortConditionLowVol or shortConditionHighVol, "Short Entry", "Volatility Regime: Short Entry Signal")
+alertcondition(isLowVolRegime, "Low Volatility Regime", "Volatility Regime: Low Volatility Detected")
+alertcondition(isHighVol, "High Volatility Regime", "Volatility Regime: High Volatility Detected")

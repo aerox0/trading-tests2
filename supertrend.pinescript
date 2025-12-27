@@ -1,0 +1,76 @@
+//@version=6
+strategy("Supertrend Strategy", overlay=true, format=format.price, precision=2)
+
+// Input parameters
+Periods = input.int(10, "ATR Period")
+src = input(hl2, "Source")
+Multiplier = input.float(3.0, "ATR Multiplier", step=0.1)
+changeATR = input.bool(true, "Change ATR Calculation Method ?")
+showsignals = input.bool(true, "Show Buy/Sell Signals ?")
+highlighting = input.bool(true, "Highlighter On/Off ?")
+tradeDirection = input.string("Both", "Trade Direction", options=["Long Only", "Short Only", "Both"])
+startDate = input.time(timestamp("2020-01-01 00:00"), "Start Date")
+endDate = input.time(timestamp("2025-12-31 23:59"), "End Date")
+
+// Date filter
+inDateRange = (time >= startDate) and (time <= endDate)
+
+// Calculate ATR and Supertrend
+atr2 = ta.sma(ta.tr, Periods)
+atr = changeATR ? ta.atr(Periods) : atr2
+
+up = src - (Multiplier * atr)
+up1 = nz(up[1], up)
+up := close[1] > up1 ? math.max(up, up1) : up
+
+dn = src + (Multiplier * atr)
+dn1 = nz(dn[1], dn)
+dn := close[1] < dn1 ? math.min(dn, dn1) : dn
+
+trend = 1
+trend := nz(trend[1], trend)
+trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
+
+// Plot Supertrend lines
+upPlot = plot(trend == 1 ? up : na, title="Up Trend", style=plot.style_linebr, linewidth=2, color=color.green)
+buySignal = trend == 1 and trend[1] == -1
+plotshape(buySignal ? up : na, title="UpTrend Begins", location=location.absolute, style=shape.circle, size=size.tiny, color=color.green)
+plotshape(buySignal and showsignals ? up : na, title="Buy", text="BUY", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.green, textcolor=color.white)
+
+dnPlot = plot(trend == 1 ? na : dn, title="Down Trend", style=plot.style_linebr, linewidth=2, color=color.red)
+sellSignal = trend == -1 and trend[1] == 1
+plotshape(sellSignal ? dn : na, title="DownTrend Begins", location=location.absolute, style=shape.circle, size=size.tiny, color=color.red)
+plotshape(sellSignal and showsignals ? dn : na, title="Sell", text="SELL", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.red, textcolor=color.white)
+
+// Highlight background
+mPlot = plot(ohlc4, title="", style=plot.style_circles, linewidth=1)
+longFillColor = highlighting ? (trend == 1 ? color.new(color.green, 90) : color.white) : color.white
+shortFillColor = highlighting ? (trend == -1 ? color.new(color.red, 90) : color.white) : color.white
+fill(mPlot, upPlot, title="UpTrend Highlighter", color=longFillColor)
+fill(mPlot, dnPlot, title="DownTrend Highlighter", color=shortFillColor)
+
+// Strategy entries and exits based on trade direction and date range
+if inDateRange
+    if tradeDirection == "Long Only"
+        if buySignal
+            strategy.entry("Long", strategy.long)
+        if sellSignal
+            strategy.close("Long")
+
+    if tradeDirection == "Short Only"
+        if sellSignal
+            strategy.entry("Short", strategy.short)
+        if buySignal
+            strategy.close("Short")
+
+    if tradeDirection == "Both"
+        if buySignal
+            strategy.entry("Long", strategy.long)
+            strategy.close("Short")
+        if sellSignal
+            strategy.entry("Short", strategy.short)
+            strategy.close("Long")
+
+// Close positions when outside date range
+if not inDateRange
+    strategy.close_all()

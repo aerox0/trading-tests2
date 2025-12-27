@@ -1,0 +1,71 @@
+// This work is licensed under a Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © LuxAlgo
+
+//@version=6
+strategy("Support and Resistance Strategy [LuxAlgo]", overlay=true)
+
+// Input parameters
+toggleBreaks = input.bool(true, "Show Breaks")
+leftBars = input.int(15, "Left Bars")
+rightBars = input.int(15, "Right Bars")
+volumeThresh = input.int(20, "Volume Threshold")
+stopLossPct = input.float(2.0, "Stop Loss %", minval=0.1, maxval=50) / 100
+takeProfitPct = input.float(4.0, "Take Profit %", minval=0.1, maxval=50) / 100
+
+// Calculate pivots
+pivotHigh = ta.pivothigh(high, leftBars, rightBars)
+pivotLow = ta.pivotlow(low, leftBars, rightBars)
+
+var float highUsePivot = na
+var float lowUsePivot = na
+
+if not na(pivotHigh)
+    highUsePivot := pivotHigh
+
+if not na(pivotLow)
+    lowUsePivot := pivotLow
+
+// Plot support and resistance
+r1 = plot(not na(pivotHigh) ? highUsePivot : na, color=color.red, linewidth=2, offset=-(rightBars+1), title="Resistance", style=plot.style_linebr)
+s1 = plot(not na(pivotLow) ? lowUsePivot : na, color=color.blue, linewidth=2, offset=-(rightBars+1), title="Support", style=plot.style_linebr)
+
+// Volume %
+short = ta.ema(volume, 5)
+long = ta.ema(volume, 10)
+osc = 100 * (short - long) / long
+
+// Break signals with volume
+resistanceBreak = ta.crossover(close, highUsePivot) and not(open - low > close - open) and osc > volumeThresh
+supportBreak = ta.crossunder(close, lowUsePivot) and not (open - close < high - open) and osc > volumeThresh
+
+// Bull / bear wicks
+bullWick = ta.crossover(close, highUsePivot) and open - low > close - open
+bearWick = ta.crossunder(close, lowUsePivot) and open - close < high - open
+
+// Plot break signals
+plotshape(toggleBreaks and supportBreak, title="Support Break", text='B', style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, size=size.tiny)
+plotshape(toggleBreaks and resistanceBreak, title="Resistance Break", text='B', style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.tiny)
+plotshape(toggleBreaks and bullWick, title="Bull Wick", text='Bull Wick', style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.tiny)
+plotshape(toggleBreaks and bearWick, title="Bear Wick", text='Bear Wick', style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, size=size.tiny)
+
+// Strategy entries
+if resistanceBreak
+    strategy.entry("Long", strategy.long)
+
+if supportBreak
+    strategy.entry("Short", strategy.short)
+
+// Exit conditions with stop loss and take profit
+if strategy.position_size > 0
+    stopLossPrice = strategy.position_avg_price * (1 - stopLossPct)
+    takeProfitPrice = strategy.position_avg_price * (1 + takeProfitPct)
+    strategy.exit("Exit Long", "Long", stop=stopLossPrice, limit=takeProfitPrice)
+
+if strategy.position_size < 0
+    stopLossPrice = strategy.position_avg_price * (1 + stopLossPct)
+    takeProfitPrice = strategy.position_avg_price * (1 - takeProfitPct)
+    strategy.exit("Exit Short", "Short", stop=stopLossPrice, limit=takeProfitPrice)
+
+// Alerts
+alertcondition(ta.crossunder(close, lowUsePivot) and osc > volumeThresh, title="Support Broken", message="Support Broken")
+alertcondition(ta.crossover(close, highUsePivot) and osc > volumeThresh, title="Resistance Broken", message="Resistance Broken")
