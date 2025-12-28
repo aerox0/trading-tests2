@@ -269,6 +269,102 @@ def plot_equity_curves(strategy_equity, ba_h_equity, dates):
     plt.show()
 
 
+def calculate_monthly_returns(equity_curve, dates):
+    """Calculate monthly returns from equity curve"""
+    # Create DataFrame with dates and equity
+    df_returns = pd.DataFrame({"date": dates, "equity": equity_curve})
+    df_returns["date"] = pd.to_datetime(df_returns["date"])
+    df_returns.set_index("date", inplace=True)
+
+    # Get last equity value of each month
+    monthly_equity = df_returns.resample("ME")["equity"].last()
+
+    # Calculate monthly returns as percentage
+    monthly_returns = monthly_equity.pct_change() * 100
+
+    # Remove NaN for first month (no previous month to compare)
+    monthly_returns = monthly_returns.dropna()
+
+    return monthly_returns
+
+
+def print_monthly_returns(strategy_returns, ba_h_returns):
+    """Print monthly returns in a formatted table"""
+    print("\n" + "=" * 80)
+    print("MONTHLY RETURNS COMPARISON (%)")
+    print("=" * 80)
+    print(f"{'Month':<15} {'Strategy':>12} {'Buy & Hold':>12} {'Difference':>12}")
+    print("-" * 80)
+
+    all_months = sorted(set(strategy_returns.index) | set(ba_h_returns.index))
+
+    total_strategy = 0
+    total_bah = 0
+
+    for month in all_months:
+        strategy_ret = strategy_returns.get(month, 0)
+        bah_ret = ba_h_returns.get(month, 0)
+        diff = strategy_ret - bah_ret
+
+        # Format month as YYYY-MM
+        month_str = month.strftime("%Y-%m")
+
+        # Color coding with symbols
+        strategy_symbol = "✓" if strategy_ret > 0 else "✗" if strategy_ret < 0 else " "
+        bah_symbol = "✓" if bah_ret > 0 else "✗" if bah_ret < 0 else " "
+
+        print(
+            f"{month_str:<15} {strategy_ret:>10.2f}%{strategy_symbol:>2} {bah_ret:>10.2f}%{bah_symbol:>2} {diff:>12.2f}%"
+        )
+
+        total_strategy += strategy_ret
+        total_bah += bah_ret
+
+    print("-" * 80)
+    print(
+        f"{'TOTAL':<15} {total_strategy:>10.2f}% {total_bah:>10.2f}% {total_strategy - total_bah:>12.2f}%"
+    )
+    print("=" * 80)
+
+
+def plot_monthly_returns_bar(strategy_returns, ba_h_returns):
+    """Plot monthly returns as bar chart"""
+    all_months = sorted(set(strategy_returns.index) | set(ba_h_returns.index))
+
+    strategy_values = [strategy_returns.get(month, 0) for month in all_months]
+    bah_values = [ba_h_returns.get(month, 0) for month in all_months]
+
+    x = np.arange(len(all_months))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    bars1 = ax.bar(
+        x - width / 2, strategy_values, width, label="Strategy", color="blue", alpha=0.7
+    )
+    bars2 = ax.bar(
+        x + width / 2, bah_values, width, label="Buy & Hold", color="orange", alpha=0.7
+    )
+
+    ax.set_xlabel("Month", fontsize=12)
+    ax.set_ylabel("Return (%)", fontsize=12)
+    ax.set_title("Monthly Returns Comparison", fontsize=14, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        [m.strftime("%Y-%m") for m in all_months], rotation=45, ha="right"
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis="y")
+
+    # Add horizontal line at 0
+    ax.axhline(y=0, color="black", linestyle="-", linewidth=0.5)
+
+    plt.tight_layout()
+    plt.savefig("optimized_trend_monthly_returns.png", dpi=150, bbox_inches="tight")
+    print("Monthly returns bar chart saved to: optimized_trend_monthly_returns.png")
+    plt.show()
+
+
 def main():
     """Run optimized strategy backtest"""
     print("=" * 80)
@@ -347,6 +443,13 @@ def main():
         ba_h_equity.append(ba_h_value)
 
     plot_equity_curves(strategy_equity, ba_h_equity, dates)
+
+    # Calculate and display monthly returns
+    strategy_monthly = calculate_monthly_returns(strategy_equity, dates)
+    ba_h_monthly = calculate_monthly_returns(ba_h_equity, dates)
+
+    print_monthly_returns(strategy_monthly, ba_h_monthly)
+    plot_monthly_returns_bar(strategy_monthly, ba_h_monthly)
 
     return results
 
