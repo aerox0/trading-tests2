@@ -1,0 +1,146 @@
+//@version=6
+strategy("Optimized Trend-Following Strategy (1H)", overlay=true, initial_capital=10000, process_orders_on_close=true, default_qty_type=strategy.percent_of_equity, default_qty_value=50)
+
+// ========== INPUT PARAMETERS ==========
+// BEST parameters from robust grid search for 1H timeframe
+ema_fast_period = input.int(34, "Fast EMA Period", minval=5, maxval=200)
+ema_slow_period = input.int(200, "Slow EMA Period", minval=20, maxval=500)
+atr_period = input.int(14, "ATR Period", minval=5, maxval=50)
+atr_multiplier_sl = input.float(0.5, "ATR Stop Loss Multiplier", minval=0.1, maxval=2.0, step=0.1)
+atr_multiplier_tp = input.float(2.5, "ATR Take Profit Multiplier", minval=0.5, maxval=5.0, step=0.1)
+rsi_period = input.int(14, "RSI Period", minval=5, maxval=50)
+rsi_long_filter = input.int(70, "RSI Long Filter (max)", minval=50, maxval=100)
+rsi_short_filter = input.int(30, "RSI Short Filter (min)", minval=0, maxval=50)
+volume_period = input.int(20, "Volume MA Period", minval=5, maxval=100)
+pullback_threshold_pct = input.float(1.0, "Pullback Threshold (%)", minval=0.1, maxval=5.0, step=0.1)
+
+// ========== CALCULATE INDICATORS ==========
+// EMA indicators
+ema_fast = ta.ema(close, ema_fast_period)
+ema_slow = ta.ema(close, ema_slow_period)
+
+// ATR for dynamic stops
+atr_value = ta.atr(atr_period)
+
+// RSI
+rsi_value = ta.rsi(close, rsi_period)
+
+// Volume filter
+volume_avg = ta.sma(volume, volume_period)
+volume_confirmed = volume >= volume_avg
+
+// Trend direction
+is_bullish_trend = close > ema_slow
+is_bearish_trend = close < ema_slow
+
+// Pullback to fast EMA
+distance_to_ema_fast_pct = (ema_fast - close) / close * 100
+near_ema_fast = math.abs(close - ema_fast) / close < (pullback_threshold_pct / 100)
+
+// RSI filters
+rsi_long_ok = rsi_value < rsi_long_filter
+rsi_short_ok = rsi_value > rsi_short_filter
+
+// ========== ENTRY CONDITIONS ==========
+// Long entry conditions
+long_condition = is_bullish_trend and near_ema_fast and rsi_long_ok and volume_confirmed
+
+// Short entry conditions
+short_condition = is_bearish_trend and near_ema_fast and rsi_short_ok and volume_confirmed
+
+// ========== ENTRY/EXIT LOGIC ==========
+var float long_stop_loss = na
+var float long_take_profit = na
+var float short_stop_loss = na
+var float short_take_profit = na
+
+// Long entries
+if long_condition and strategy.position_size == 0
+    long_stop_loss := close - (atr_value * atr_multiplier_sl)
+    long_take_profit := close + (atr_value * atr_multiplier_tp)
+    strategy.entry("Long", strategy.long)
+
+// Short entries
+if short_condition and strategy.position_size == 0
+    short_stop_loss := close + (atr_value * atr_multiplier_sl)
+    short_take_profit := close - (atr_value * atr_multiplier_tp)
+    strategy.entry("Short", strategy.short)
+
+// Exit conditions for long positions
+if strategy.position_size > 0
+    if close <= long_stop_loss
+        strategy.close("Long", comment="SL")
+    else if close >= long_take_profit
+        strategy.close("Long", comment="TP")
+    else if not is_bullish_trend
+        strategy.close("Long", comment="Trend Change")
+
+// Exit conditions for short positions
+if strategy.position_size < 0
+    if close >= short_stop_loss
+        strategy.close("Short", comment="SL")
+    else if close <= short_take_profit
+        strategy.close("Short", comment="TP")
+    else if not is_bearish_trend
+        strategy.close("Short", comment="Trend Change")
+
+// Reset stop variables when position closes
+if strategy.position_size == 0
+    long_stop_loss := na
+    long_take_profit := na
+    short_stop_loss := na
+    short_take_profit := na
+
+// ========== VISUALIZATION ==========
+// Plot EMAs
+plot(ema_fast, "Fast EMA", color=color.new(color.blue, 0), linewidth=2)
+plot(ema_slow, "Slow EMA", color=color.new(color.orange, 0), linewidth=2)
+
+// Plot trend background
+bgcolor(is_bullish_trend ? color.new(color.green, 95) : is_bearish_trend ? color.new(color.red, 95) : na)
+
+// Plot entry signals
+plotshape(long_condition, "Long Signal", shape.triangleup, location.belowbar, color.new(color.green, 0), size=size.small)
+plotshape(short_condition, "Short Signal", shape.triangledown, location.abovebar, color.new(color.red, 0), size=size.small)
+
+// Plot stop loss and take profit levels
+plot(strategy.position_size > 0 ? long_stop_loss : na, "Long SL", color.new(color.red, 0), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size > 0 ? long_take_profit : na, "Long TP", color.new(color.green, 0), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size < 0 ? short_stop_loss : na, "Short SL", color.new(color.red, 0), style=plot.style_linebr, linewidth=1)
+plot(strategy.position_size < 0 ? short_take_profit : na, "Short TP", color.new(color.green, 0), style=plot.style_linebr, linewidth=1)
+
+// ========== INFO TABLE ==========
+var table info_table = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 80), border_width=1)
+
+if barstate.islast
+    table.cell(info_table, 0, 0, "Indicator", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 0, "Value", text_color=color.white, text_size=size.small)
+    
+    table.cell(info_table, 0, 1, "Fast EMA", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 1, str.tostring(ema_fast, format.mintick), text_color=color.blue, text_size=size.small)
+    
+    table.cell(info_table, 0, 2, "Slow EMA", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 2, str.tostring(ema_slow, format.mintick), text_color=color.orange, text_size=size.small)
+    
+    table.cell(info_table, 0, 3, "ATR", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 3, str.tostring(atr_value, format.mintick), text_color=color.yellow, text_size=size.small)
+    
+    table.cell(info_table, 0, 4, "RSI", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 4, str.tostring(rsi_value, "#.#"), text_color=color.purple, text_size=size.small)
+    
+    table.cell(info_table, 0, 5, "Trend", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 5, is_bullish_trend ? "BULL" : is_bearish_trend ? "BEAR" : "NEUTRAL", text_color=is_bullish_trend ? color.green : is_bearish_trend ? color.red : color.gray, text_size=size.small)
+    
+    table.cell(info_table, 0, 6, "Near Fast EMA", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 6, near_ema_fast ? "YES" : "NO", text_color=near_ema_fast ? color.green : color.gray, text_size=size.small)
+    
+    table.cell(info_table, 0, 7, "Position", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 7, strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "NONE", text_color=strategy.position_size > 0 ? color.green : strategy.position_size < 0 ? color.red : color.gray, text_size=size.small)
+
+// ========== ALERTS ==========
+alertcondition(long_condition, "Long Entry", "Long entry signal triggered")
+alertcondition(short_condition, "Short Entry", "Short entry signal triggered")
+alertcondition(strategy.position_size > 0 and close <= long_stop_loss, "Long Stop Loss", "Long position stopped out")
+alertcondition(strategy.position_size > 0 and close >= long_take_profit, "Long Take Profit", "Long position hit take profit")
+alertcondition(strategy.position_size < 0 and close >= short_stop_loss, "Short Stop Loss", "Short position stopped out")
+alertcondition(strategy.position_size < 0 and close <= short_take_profit, "Short Take Profit", "Short position hit take profit")
