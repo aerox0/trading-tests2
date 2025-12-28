@@ -40,10 +40,14 @@ class OptimizedTrendBacktest:
     """
     Optimized trend-following strategy based on grid search results:
     - EMA 55 (fast) for pullback detection
-    - EMA 252 (slow) for trend direction (BEST from grid search!)
-    - ATR period 20 (BEST from grid search!)
-    - ATR-based stops (0.5x SL, 2.5x TP) (BEST from grid search!)
-    - 30% position sizing (BEST from grid search!)
+    - EMA 144 (slow) for trend direction (BEST from robust grid search!)
+    - ATR period 14 (FIXED - standard value)
+    - ATR-based stops (0.6x SL, 2.0x TP) (BEST from robust grid search!)
+    - RSI 14 (FIXED - standard value)
+    - 70% position sizing (BEST from robust grid search!)
+
+    Note: This configuration was optimized for both return AND Sharpe ratio
+    with train/test split to prevent overfitting.
     """
 
     def __init__(self, df):
@@ -68,13 +72,14 @@ class OptimizedTrendBacktest:
         low = self.df["low"]
         volume = self.df["volume"]
 
-        # ACTUAL BEST parameters from grid search that gave +37.78% return:
-        # EMA 55,144 | ATR 14 | SL 0.6x, TP 2.5x | RSI 14 | Vol 1.0x | Size 70%
+        # ACTUAL BEST parameters from robust grid search that optimizes return + Sharpe:
+        # EMA 55,144 | ATR 14 | SL 0.6x, TP 2.0x | RSI 14 | Vol 1.0x | Size 70%
+        # Note: TP changed from 2.5 to 2.0 to reduce overfitting
         self.df["ema_fast"] = calculate_ema(close, 55)
         self.df["ema_slow"] = calculate_ema(close, 144)
         self.df["atr"] = calculate_atr(high, low, close, 14)
 
-        # RSI 14 (from best parameters)
+        # RSI 14 (fixed - standard value)
         self.df["rsi"] = calculate_rsi(close, 14)
 
         # Volume filter (volume >= average - matches PineScript simplified logic)
@@ -112,9 +117,10 @@ class OptimizedTrendBacktest:
             & self.df["volume_confirmed"]
         )
 
-        # ATR-based stops (0.6x SL, 2.5x TP)
+        # ATR-based stops (0.6x SL, 2.0x TP)
+        # TP reduced from 2.5 to 2.0 to reduce overfitting
         self.df["stop_loss_distance"] = self.df["atr"] * 0.6
-        self.df["take_profit_distance"] = self.df["atr"] * 2.5
+        self.df["take_profit_distance"] = self.df["atr"] * 2.0
 
     def _execute_trades(self):
         """Execute trades with optimized logic"""

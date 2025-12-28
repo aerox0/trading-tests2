@@ -63,9 +63,9 @@ atrSLMult = input.float(0.6, "ATR Stop Loss Multiplier",
                        minval=0.1, maxval=2.0, step=0.1, 
                        tooltip="Stop loss = ATR × this multiplier. Optimized: 0.6")
 
-atrTPMult = input.float(2.5, "ATR Take Profit Multiplier", 
+atrTPMult = input.float(2.0, "ATR Take Profit Multiplier", 
                        minval=0.5, maxval=5.0, step=0.1, 
-                       tooltip="Take profit = ATR × this multiplier. Optimized: 2.5")
+                       tooltip="Take profit = ATR × this multiplier. Optimized: 2.0")
 
 // Entry Mode
 usePullbackMode = input.bool(false, "Use Pullback Mode (vs Simple Crossover)", 
