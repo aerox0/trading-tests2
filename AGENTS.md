@@ -1,2 +1,4 @@
 - use uv run to run python script "uv run <file.py>"
 - never remove uv.lock
+- use uv add to add a pip package "uv add <package>"
+- avoid sys.path.insert as it will work only one pc

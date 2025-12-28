@@ -25,6 +25,7 @@ class BaseStrategy(ABC):
         # Trading state
         self.position = None
         self.entry_price = None
+        self.entry_time = None
         self.position_size = 0.0
         self.stop_loss = None
         self.take_profit = None
@@ -96,6 +97,7 @@ class BaseStrategy(ABC):
         """Reset strategy state for new backtest"""
         self.position = None
         self.entry_price = None
+        self.entry_time = None
         self.position_size = 0.0
         self.stop_loss = None
         self.take_profit = None
@@ -115,12 +117,13 @@ class BaseStrategy(ABC):
         """
         return self.capital * position_pct / price
 
-    def close_position(self, exit_price: float, reason: str) -> Dict:
+    def close_position(self, exit_price: float, reason: str, exit_time=None) -> Dict:
         """Close current position and record trade
 
         Args:
             exit_price: Exit price
             reason: Exit reason (SL, TP, Trend Change, etc.)
+            exit_time: Exit timestamp (optional)
 
         Returns:
             Trade dictionary
@@ -141,12 +144,15 @@ class BaseStrategy(ABC):
             "reason": reason,
             "type": self.position,
             "pnl_pct": (pnl / (self.entry_price * self.position_size)) * 100,
+            "entry_time": self.entry_time,
+            "exit_time": exit_time,
         }
 
         self.trades.append(trade)
 
         self.position = None
         self.entry_price = None
+        self.entry_time = None
         self.position_size = 0.0
         self.stop_loss = None
         self.take_profit = None

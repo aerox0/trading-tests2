@@ -441,6 +441,89 @@ The framework calculates these metrics automatically:
 - **Profit Factor**: Total profit / Total loss
 - **Average Trade**: Mean trade P&L
 
+---
+
+## Analytics Module
+
+Comprehensive analytics, reporting, and visualization for trading strategies.
+
+### Overview
+
+The analytics module eliminates the need for excessive `print()` statements by providing a unified API for:
+- **Results Analysis** - Extract insights from backtest results
+- **Visualization** - Interactive Plotly charts
+- **Reporting** - Export to CSV, HTML, JSON
+- **Comparison** - Compare strategies, parameters, assets, or timeframes
+- **Console Output** - Formatted summaries without manual printing
+
+### Quick Start
+
+```python
+from src.analytics import Analytics
+from src.data.fetcher import DataFetcher
+from src.strategies.trend_following import TrendFollowingStrategy
+from src.backtest.engine import BacktestEngine
+
+# Run backtest
+fetcher = DataFetcher(exchange="binance")
+df = fetcher.fetch("BTC/USDT", "4h", period_days=365)
+
+config = {
+    "ema_fast": 55,
+    "ema_slow": 144,
+    "atr_period": 14,
+    "atr_multiplier_sl": 0.6,
+    "atr_multiplier_tp": 2.0,
+    "position_size_pct": 0.7,
+    "initial_capital": 10000,
+}
+
+strategy = TrendFollowingStrategy(config)
+engine = BacktestEngine({"initial_capital": 10000})
+results = engine.run(df, strategy)
+
+# Create analytics object
+buy_hold = fetcher.calculate_buy_and_hold(df)
+analytics = Analytics(
+    results,
+    df=df,
+    name="Trend Following (EMA 55/144)",
+    config=config,
+    buy_hold_results=buy_hold,
+)
+
+# Print formatted summary (no print statements needed!)
+analytics.print_summary()
+
+# Generate reports
+analytics.save_csv("outputs/metrics.csv")
+analytics.save_json("outputs/report.json")
+analytics.save_html("outputs/report.html")
+
+# Generate plots
+analytics.plot_all(output_dir="outputs/plots")
+```
+
+### Compare Strategies
+
+```python
+from src.analytics import compare_strategies, rank_strategies
+
+# Run multiple strategies
+results_dict = {
+    "Strategy A": results_a,
+    "Strategy B": results_b,
+    "Strategy C": results_c,
+}
+
+# Compare with table
+compare_strategies(results_dict)
+
+# Rank by Sharpe
+rank_strategies(results_dict, by="sharpe_ratio")
+```
+
+
 ## Dependencies
 
 ```bash

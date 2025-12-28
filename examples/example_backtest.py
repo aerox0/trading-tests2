@@ -22,8 +22,13 @@ def main():
 
     # Step 1: Fetch data
     print("\nStep 1: Fetching data...")
+    timeframe = "4h"
+    period_days = 365
     fetcher = DataFetcher(exchange="binance")
-    df = fetcher.fetch(symbol="BTC/USDT", timeframe="4h", period_days=365)
+    df = fetcher.fetch(symbol="BTC/USDT", timeframe=timeframe, period_days=period_days)
+
+    date_start = str(df.index[0])[:10]
+    date_end = str(df.index[-1])[:10]
 
     # Step 2: Configure strategy
     print("\nStep 2: Configuring strategy...")
@@ -42,6 +47,8 @@ def main():
         "position_size_pct": 0.7,
         "initial_capital": 10000.0,
         "name": "Trend Following Example",
+        "timeframe": timeframe,
+        "date_range": f"{date_start} to {date_end}",
     }
     print(
         f"  Config: EMA({config['ema_fast']},{config['ema_slow']}) "

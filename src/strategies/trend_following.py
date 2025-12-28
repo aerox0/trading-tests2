@@ -126,6 +126,7 @@ class TrendFollowingStrategy(BaseStrategy):
 
         self.position = "long"
         self.entry_price = close
+        self.entry_time = row.name
         self.position_size = self.capital * position_size_pct / close
         self.stop_loss = close - atr_sl_distance
         self.take_profit = close + atr_tp_distance
@@ -139,6 +140,7 @@ class TrendFollowingStrategy(BaseStrategy):
 
         self.position = "short"
         self.entry_price = close
+        self.entry_time = row.name
         self.position_size = self.capital * position_size_pct / close
         self.stop_loss = close + atr_sl_distance
         self.take_profit = close - atr_tp_distance
@@ -164,4 +166,4 @@ class TrendFollowingStrategy(BaseStrategy):
                 exit_reason = "Trend Change"
 
         if exit_reason:
-            self.close_position(close, exit_reason)
+            self.close_position(close, exit_reason, exit_time=df.iloc[i].name)
