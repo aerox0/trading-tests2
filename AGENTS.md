@@ -1,0 +1,1 @@
+- use uv run to run python script "uv run <file.py>"
