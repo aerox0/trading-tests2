@@ -6,6 +6,7 @@ Uses best parameters from grid search: EMA(55,144) with ATR stops
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from btc_data_fetcher import fetch_btc_data_4h, calculate_buy_and_hold_return
 
 
@@ -238,6 +239,36 @@ class OptimizedTrendBacktest:
         }
 
 
+def plot_equity_curves(strategy_equity, ba_h_equity, dates):
+    """Plot strategy and buy-and-hold equity curves"""
+    plt.figure(figsize=(12, 6))
+
+    plt.plot(dates, strategy_equity, label="Strategy", linewidth=2, color="blue")
+    plt.plot(
+        dates,
+        ba_h_equity,
+        label="Buy & Hold",
+        linewidth=2,
+        color="orange",
+        linestyle="--",
+    )
+
+    plt.title(
+        "Strategy vs Buy & Hold - Equity Curve Comparison",
+        fontsize=14,
+        fontweight="bold",
+    )
+    plt.xlabel("Date", fontsize=12)
+    plt.ylabel("Portfolio Value ($)", fontsize=12)
+    plt.legend(loc="upper left")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    plt.savefig("optimized_trend_equity_curve.png", dpi=150, bbox_inches="tight")
+    print("\nEquity curve saved to: optimized_trend_equity_curve.png")
+    plt.show()
+
+
 def main():
     """Run optimized strategy backtest"""
     print("=" * 80)
@@ -301,6 +332,21 @@ def main():
         print("✓ Drawdown better than Buy and Hold")
 
     print("=" * 80)
+
+    # Plot equity curves
+    strategy_equity = backtest.equity_curve[1:]  # Skip initial capital (bar 0)
+    dates = df.index.to_list()
+
+    # Create buy-and-hold equity curve
+    ba_h_equity = []
+    initial_capital = 10000.0
+    initial_price = df["close"].iloc[0]
+
+    for price in df["close"]:
+        ba_h_value = initial_capital * (price / initial_price)
+        ba_h_equity.append(ba_h_value)
+
+    plot_equity_curves(strategy_equity, ba_h_equity, dates)
 
     return results
 
