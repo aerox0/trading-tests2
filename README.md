@@ -66,12 +66,25 @@ However, it **underperforms in strong bull markets** (expected behavior) because
 ## Files
 
 - **optimized_trend.py** - Python backtest implementation with equity curves and monthly returns
+- **trend_backtest_simple.py** - Grid search optimization to find best parameters (4,374+ combinations tested)
 - **optimized_trend_strategy.pine** - TradingView PineScript v6 version
 - **btc_data_fetcher.py** - Data fetching utility from Binance
 
 ## Usage
 
-### Python Backtest
+### Grid Search Optimization
+
+```bash
+python trend_backtest_simple.py
+```
+
+This will:
+1. Fetch 2 years of BTC/USDT 4H data from Binance
+2. Test 4,374+ parameter combinations
+3. Find optimal parameters that maximize risk-adjusted returns
+4. Display best configuration and performance metrics
+
+### Python Backtest (Using Optimized Parameters)
 
 ```bash
 python optimized_trend.py
