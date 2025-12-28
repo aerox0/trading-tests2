@@ -67,6 +67,7 @@ However, it **underperforms in strong bull markets** (expected behavior) because
 
 - **optimized_trend.py** - Python backtest implementation with equity curves and monthly returns
 - **trend_backtest_simple.py** - Grid search optimization to find best parameters (4,374+ combinations tested)
+- **overfitting_analysis.py** - Overfitting detection with walk-forward, Monte Carlo, and sensitivity analysis
 - **optimized_trend_strategy.pine** - TradingView PineScript v6 version
 - **btc_data_fetcher.py** - Data fetching utility from Binance
 
@@ -75,7 +76,7 @@ However, it **underperforms in strong bull markets** (expected behavior) because
 ### Grid Search Optimization
 
 ```bash
-python trend_backtest_simple.py
+uv run trend_backtest_simple.py
 ```
 
 This will:
@@ -84,10 +85,29 @@ This will:
 3. Find optimal parameters that maximize risk-adjusted returns
 4. Display best configuration and performance metrics
 
+**⚠️ Overfitting Risk**: Always run overfitting analysis after grid search to validate robustness.
+
+### Overfitting Analysis
+
+```bash
+uv run overfitting_analysis.py
+```
+
+This will:
+1. **Walk-Forward Analysis**: Train on sliding windows, test on out-of-sample data
+2. **Parameter Sensitivity**: Test if small parameter changes cause large performance drops
+3. **Monte Carlo Bootstrap**: Sample with replacement to test result stability
+4. **Train/Test Split**: Compare in-sample vs out-of-sample performance
+
+**Results Interpretation:**
+- ✓ **GOOD**: Performance holds up on out-of-sample data (decay < 40%)
+- ⚠ **MODERATE**: Some performance degradation expected
+- ✗ **OVERFITTING**: Major performance drop on out-of-sample data (decay > 60%)
+
 ### Python Backtest (Using Optimized Parameters)
 
 ```bash
-python optimized_trend.py
+uv run optimized_trend.py
 ```
 
 This will:
@@ -108,7 +128,7 @@ This will:
 ## Dependencies
 
 ```bash
-pip install pandas numpy matplotlib ccxt
+uv add pandas numpy matplotlib ccxt
 ```
 
 ## Best Use Cases
