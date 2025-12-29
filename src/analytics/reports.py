@@ -422,6 +422,7 @@ class ReportGenerator:
         df: Optional[pd.DataFrame],
         name: str,
         config: Dict,
+        include_buy_hold: bool = False,
     ) -> str:
         """Generate HTML report with iframes to plot files
 
@@ -430,6 +431,7 @@ class ReportGenerator:
             df: OHLCV DataFrame
             name: Strategy name
             config: Strategy config
+            include_buy_hold: Whether to include Buy & Hold in charts (default: False)
 
         Returns:
             HTML string with iframes to plot files
@@ -437,6 +439,7 @@ class ReportGenerator:
 
         timeframe = config.get("timeframe", "N/A")
         date_range = config.get("date_range", "N/A")
+        checked_attr = "checked" if include_buy_hold else ""
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -473,6 +476,9 @@ class ReportGenerator:
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
         iframe {{ width: 100%; height: 500px; border: none; border-radius: 4px; }}
+        .toggle-container {{ margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 4px; display: flex; align-items: center; gap: 10px; }}
+        .toggle-container input {{ width: 18px; height: 18px; cursor: pointer; }}
+        .toggle-container label {{ color: white; cursor: pointer; font-size: 14px; }}
     </style>
 </head>
 <body>
@@ -489,6 +495,10 @@ class ReportGenerator:
                     <span class="meta-label">Date Range</span>
                     <span class="meta-value">{date_range}</span>
                 </div>
+            </div>
+            <div class="toggle-container">
+                <input type="checkbox" id="toggleBah" {checked_attr} onchange="toggleBuyAndHold()">
+                <label for="toggleBah">Show Buy & Hold Benchmark</label>
             </div>
         </div>
 
@@ -618,6 +628,28 @@ class ReportGenerator:
             // Show selected tab
             document.getElementById(tabId).classList.add('active');
             event.target.classList.add('active');
+        }
+
+        function toggleBuyAndHold() {
+            const showBah = document.getElementById('toggleBah').checked;
+
+            // Reload iframes with bah parameter
+            const iframes = document.querySelectorAll('iframe');
+            const chartsWithBah = ['equity', 'monthly'];
+
+            iframes.forEach(iframe => {
+                let src = iframe.src;
+                const shouldUpdate = chartsWithBah.some(chart => src.includes(chart));
+
+                if (shouldUpdate) {
+                    // Remove existing bah parameter
+                    src = src.replace(/[?&]bah=[01]/g, '');
+
+                    // Add new bah parameter
+                    const separator = src.includes('?') ? '&' : '?';
+                    iframe.src = src + separator + 'bah=' + (showBah ? '1' : '0');
+                }
+            });
         }
     </script>
 </body>

@@ -140,11 +140,14 @@ class Analytics:
 
         print(f"\nAll plots saved to {output_path.absolute()}")
 
-    def plot_equity_curve(self, save_path: Optional[str] = None):
+    def plot_equity_curve(
+        self, save_path: Optional[str] = None, include_buy_hold: bool = False
+    ):
         """Plot equity curve
 
         Args:
             save_path: Path to save plot (defaults to output_dir/equity_curve.html)
+            include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
         Returns:
             Plotly figure object
@@ -157,6 +160,7 @@ class Analytics:
             name=self.name,
             buy_hold_results=self.buy_hold_results,
             save_path=save_path,
+            include_buy_hold=include_buy_hold,
         )
 
     def plot_drawdown(self, save_path: Optional[str] = None):
@@ -175,13 +179,17 @@ class Analytics:
         )
 
     def plot_monthly_returns(
-        self, save_path: Optional[str] = None, use_bar_chart: bool = True
+        self,
+        save_path: Optional[str] = None,
+        use_bar_chart: bool = True,
+        include_buy_hold: bool = False,
     ):
         """Plot monthly returns
 
         Args:
             save_path: Path to save plot (defaults to output_dir/monthly_returns.html)
             use_bar_chart: If True, use bar chart; if False, use heatmap
+            include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
         Returns:
             Plotly figure object
@@ -195,9 +203,12 @@ class Analytics:
         return plot_monthly_returns(
             self.results,
             timestamps=self.df.index,
+            df=self.df,
             name=self.name,
             use_bar_chart=use_bar_chart,
             save_path=save_path,
+            buy_hold_results=self.buy_hold_results,
+            include_buy_hold=include_buy_hold,
         )
 
     def plot_pnl_distribution(self, save_path: Optional[str] = None):
@@ -331,17 +342,20 @@ class Analytics:
         """
         return self.analyzer.get_summary_dict()
 
-    def generate_dashboard(self, filename: str = "dashboard.html"):
+    def generate_dashboard(
+        self, filename: str = "dashboard.html", include_buy_hold: bool = False
+    ):
         """Generate single HTML dashboard with all plots and metrics
 
         Args:
             filename: Output HTML filename
+            include_buy_hold: Whether to include Buy & Hold in charts (default: False)
         """
         # Generate individual plots first
-        self.plot_equity_curve()
+        self.plot_equity_curve(include_buy_hold=include_buy_hold)
         self.plot_drawdown()
         if self.df is not None:
-            self.plot_monthly_returns()
+            self.plot_monthly_returns(include_buy_hold=include_buy_hold)
             self.plot_trade_performance_timeline()
             self.plot_win_rate_over_time()
             self.plot_trade_duration_distribution()

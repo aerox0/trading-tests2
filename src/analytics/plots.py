@@ -13,6 +13,7 @@ def plot_equity_curve(
     name: str = "Strategy",
     buy_hold_results: Optional[Dict[str, Any]] = None,
     save_path: Optional[str] = None,
+    include_buy_hold: bool = False,
 ) -> go.Figure:
     """Plot equity curve with dates, benchmark, and trade markers
 
@@ -22,6 +23,7 @@ def plot_equity_curve(
         name: Strategy name
         buy_hold_results: Buy & hold results for benchmark comparison
         save_path: Path to save plot (optional)
+        include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
     Returns:
         Plotly figure object
@@ -51,17 +53,31 @@ def plot_equity_curve(
         )
     )
 
-    # Add buy & hold benchmark
-    if buy_hold_results and "equity_curve" in buy_hold_results:
-        buy_hold_curve = buy_hold_results["equity_curve"]
-        if len(buy_hold_curve) == len(equity_curve):
+    # Add buy & hold benchmark (always include if data available, control visibility)
+    if buy_hold_results:
+        initial_capital_bah = buy_hold_results.get("initial_capital", 10000)
+        start_price = buy_hold_results.get("start_price")
+        end_price = buy_hold_results.get("end_price")
+
+        if (
+            df is not None
+            and start_price
+            and end_price
+            and len(df) == len(equity_curve)
+        ):
+            # Calculate buy & hold equity curve
+            bah_equity = [
+                initial_capital_bah * (price / start_price)
+                for price in df["close"].values
+            ]
             fig.add_trace(
                 go.Scatter(
                     x=x_axis,
-                    y=buy_hold_curve,
+                    y=bah_equity,
                     name="Buy & Hold",
                     line=dict(color="gray", width=2, dash="dash"),
                     hovertemplate="<b>%{x}</b><br>Buy & Hold: $%{y:,.2f}<extra></extra>",
+                    visible=include_buy_hold,
                 )
             )
 
@@ -121,7 +137,34 @@ def plot_equity_curve(
     )
 
     if save_path:
-        fig.write_html(save_path)
+        has_bah = bool(buy_hold_results and df is not None)
+        if has_bah:
+            html = fig.to_html(include_plotlyjs="cdn", full_html=True)
+            toggle_script = """
+    <script>
+        // Check URL parameter for bah visibility
+        function checkBahParameter() {
+            const params = new URLSearchParams(window.location.search);
+            const showBah = params.get('bah') === '1';
+            
+            // Find\` div id dynamically (it changes each time)
+            const plotDiv = document.querySelector('.plotly-graph-div');
+            if (plotDiv) {
+                Plotly.restyle(plotDiv, {
+                    visible: [true, showBah]
+                });
+            }
+        }
+        
+        // Check on page load
+        checkBahParameter();
+    </script>
+"""
+            html = html.replace("</body>", toggle_script + "</body>")
+            with open(save_path, "w") as f:
+                f.write(html)
+        else:
+            fig.write_html(save_path)
         print(f"Saved equity curve to {save_path}")
 
     return fig
@@ -218,6 +261,9 @@ def plot_monthly_returns(
     name: str = "Strategy",
     save_path: Optional[str] = None,
     use_bar_chart: bool = True,
+    df: Optional[pd.DataFrame] = None,
+    buy_hold_results: Optional[Dict[str, Any]] = None,
+    include_buy_hold: bool = False,
 ) -> go.Figure:
     """Plot monthly returns as bar chart (or heatmap)
 
@@ -227,6 +273,8 @@ def plot_monthly_returns(
         name: Strategy name
         save_path: Path to save plot (optional)
         use_bar_chart: If True, use bar chart; if False, use heatmap
+        buy_hold_results: Buy & hold results for benchmark comparison
+        include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
     Returns:
         Plotly figure object
@@ -238,8 +286,8 @@ def plot_monthly_returns(
         return None
 
     # Create DataFrame and resample monthly
-    df = pd.DataFrame({"equity": equity_curve}, index=timestamps)
-    monthly = df.resample("ME").last().dropna()
+    equity_df = pd.DataFrame({"equity": equity_curve}, index=timestamps)
+    monthly = equity_df.resample("ME").last().dropna()
 
     if len(monthly) < 2:
         print("Not enough data for monthly returns")
@@ -263,11 +311,46 @@ def plot_monthly_returns(
             go.Bar(
                 x=monthly_returns["year_month"],
                 y=monthly_returns["equity"],
-                name="Monthly Return",
+                name="Strategy",
                 marker_color=colors,
-                hovertemplate="<b>%{x}</b><br>Return: %{y:.2f}%<extra></extra>",
+                hovertemplate="<b>%{x}</b><br>Strategy: %{y:.2f}%<extra></extra>",
             )
         )
+
+        # Add buy & hold benchmark (always include if data available, control visibility)
+        if buy_hold_results and df is not None:
+            initial_capital_bh = buy_hold_results.get("initial_capital", 10000)
+            start_price = buy_hold_results.get("start_price")
+            end_price = buy_hold_results.get("end_price")
+
+            if start_price and end_price and len(df) == len(timestamps):
+                # Calculate buy & hold equity curve
+                bah_equity = [
+                    initial_capital_bh * (price / start_price)
+                    for price in df["close"].values
+                ]
+                df_bh = pd.DataFrame({"equity": bah_equity}, index=timestamps)
+                monthly_bh = df_bh.resample("ME").last().dropna()
+                monthly_bh_returns = monthly_bh.pct_change().dropna() * 100
+
+                if len(monthly_bh_returns) > 0 and len(monthly_bh_returns) == len(
+                    monthly_returns
+                ):
+                    monthly_bh_returns = monthly_bh_returns.reset_index()
+                    monthly_bh_returns["year_month"] = monthly_bh_returns[
+                        "timestamp"
+                    ].dt.strftime("%Y-%m")
+
+                    fig.add_trace(
+                        go.Bar(
+                            x=monthly_bh_returns["year_month"],
+                            y=monthly_bh_returns["equity"],
+                            name="Buy & Hold",
+                            marker_color="rgba(100, 100, 100, 0.3)",
+                            hovertemplate="<b>%{x}</b><br>Buy & Hold: %{y:.2f}%<extra></extra>",
+                            visible=include_buy_hold,
+                        )
+                    )
 
         fig.update_layout(
             title=f"{name} - Monthly Returns (%)",
@@ -275,7 +358,7 @@ def plot_monthly_returns(
             yaxis_title="Return (%)",
             template="plotly_white",
             height=500,
-            showlegend=False,
+            showlegend=include_buy_hold,
         )
     else:
         # Heatmap version (original)
@@ -327,7 +410,34 @@ def plot_monthly_returns(
         )
 
     if save_path:
-        fig.write_html(save_path)
+        has_bah = bool(buy_hold_results and df is not None)
+        if has_bah:
+            html = fig.to_html(include_plotlyjs="cdn", full_html=True)
+            toggle_script = """
+    <script>
+        // Check URL parameter for bah visibility
+        function checkBahParameter() {
+            const params = new URLSearchParams(window.location.search);
+            const showBah = params.get('bah') === '1';
+            
+            // Find\` div id dynamically (it changes each time)
+            const plotDiv = document.querySelector('.plotly-graph-div');
+            if (plotDiv) {
+                Plotly.restyle(plotDiv, {
+                    visible: [true, showBah]
+                });
+            }
+        }
+        
+        // Check on page load
+        checkBahParameter();
+    </script>
+"""
+            html = html.replace("</body>", toggle_script + "</body>")
+            with open(save_path, "w") as f:
+                f.write(html)
+        else:
+            fig.write_html(save_path)
         print(f"Saved monthly returns to {save_path}")
 
     return fig
