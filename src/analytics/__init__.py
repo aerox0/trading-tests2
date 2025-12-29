@@ -163,11 +163,16 @@ class Analytics:
             include_buy_hold=include_buy_hold,
         )
 
-    def plot_drawdown(self, save_path: Optional[str] = None):
+    def plot_drawdown(
+        self,
+        save_path: Optional[str] = None,
+        include_buy_hold: bool = False,
+    ):
         """Plot drawdown chart
 
         Args:
             save_path: Path to save plot (defaults to output_dir/drawdown.html)
+            include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
         Returns:
             Plotly figure object
@@ -175,7 +180,12 @@ class Analytics:
         if save_path is None:
             save_path = str(self.output_dir / "drawdown.html")
         return plot_drawdown(
-            self.results, df=self.df, name=self.name, save_path=save_path
+            self.results,
+            df=self.df,
+            name=self.name,
+            save_path=save_path,
+            buy_hold_results=self.buy_hold_results,
+            include_buy_hold=include_buy_hold,
         )
 
     def plot_monthly_returns(
@@ -353,7 +363,7 @@ class Analytics:
         """
         # Generate individual plots first
         self.plot_equity_curve(include_buy_hold=include_buy_hold)
-        self.plot_drawdown()
+        self.plot_drawdown(include_buy_hold=include_buy_hold)
         if self.df is not None:
             self.plot_monthly_returns(include_buy_hold=include_buy_hold)
             self.plot_trade_performance_timeline()
@@ -368,6 +378,7 @@ class Analytics:
             self.df,
             self.name,
             self.config,
+            include_buy_hold=include_buy_hold,
         )
 
         output_path = self.output_dir / filename

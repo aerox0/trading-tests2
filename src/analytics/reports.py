@@ -635,7 +635,7 @@ class ReportGenerator:
 
             // Reload iframes with bah parameter
             const iframes = document.querySelectorAll('iframe');
-            const chartsWithBah = ['equity', 'monthly'];
+            const chartsWithBah = ['equity', 'monthly', 'drawdown'];
 
             iframes.forEach(iframe => {
                 let src = iframe.src;

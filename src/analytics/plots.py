@@ -175,6 +175,8 @@ def plot_drawdown(
     df: Optional[pd.DataFrame] = None,
     name: str = "Strategy",
     save_path: Optional[str] = None,
+    buy_hold_results: Optional[Dict[str, Any]] = None,
+    include_buy_hold: bool = False,
 ) -> go.Figure:
     """Plot drawdown chart with dates and recovery periods
 
@@ -183,6 +185,8 @@ def plot_drawdown(
         df: OHLCV DataFrame with datetime index
         name: Strategy name
         save_path: Path to save plot (optional)
+        buy_hold_results: Buy & hold results for benchmark comparison
+        include_buy_hold: Whether to include Buy & Hold benchmark (default: False)
 
     Returns:
         Plotly figure object
@@ -216,10 +220,40 @@ def plot_drawdown(
             line=dict(color="#ef5350", width=1),
             fillcolor="rgba(239, 83, 80, 0.3)",
             hovertemplate="<b>%{x}</b><br>Drawdown: %{y:.2f}%<extra></extra>",
+            visible=True,
         )
     )
 
-    # Add max drawdown annotation
+    # Add BaH drawdown if requested
+    if buy_hold_results and df is not None:
+        initial_capital_bah = buy_hold_results.get("initial_capital", 10000)
+        start_price = buy_hold_results.get("start_price")
+        end_price = buy_hold_results.get("end_price")
+
+        if start_price and end_price and len(df) == len(equity_curve):
+            # Calculate buy & hold equity curve
+            bah_equity = [
+                initial_capital_bah * (price / start_price)
+                for price in df["close"].values
+            ]
+            bah_equity_array = np.array(bah_equity)
+            bah_running_max = np.maximum.accumulate(bah_equity_array)
+            bah_drawdown = (bah_equity_array - bah_running_max) / bah_running_max * 100
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_axis,
+                    y=bah_drawdown,
+                    fill="tozeroy",
+                    name="Buy & Hold Drawdown",
+                    line=dict(color="gray", width=1, dash="dash"),
+                    fillcolor="rgba(128, 128, 128, 0.2)",
+                    hovertemplate="<b>%{x}</b><br>BaH Drawdown: %{y:.2f}%<extra></extra>",
+                    visible=include_buy_hold,
+                )
+            )
+
+    # Add max drawdown annotation (strategy)
     max_dd_idx = np.argmin(drawdown)
     max_dd = drawdown[max_dd_idx]
 
@@ -249,7 +283,35 @@ def plot_drawdown(
     )
 
     if save_path:
-        fig.write_html(save_path)
+        has_bah = bool(buy_hold_results and df is not None)
+
+        if has_bah:
+            toggle_script = """
+    <script>
+        // Check URL parameter for bah visibility
+        function checkBahParameter() {
+            const params = new URLSearchParams(window.location.search);
+            const showBah = params.get('bah') === '1';
+
+            // Find div id dynamically (it changes each time)
+            const plotDiv = document.querySelector('.plotly-graph-div');
+            if (plotDiv) {
+                Plotly.restyle(plotDiv, {
+                    visible: [true, showBah]
+                });
+            }
+        }
+
+        // Check on page load
+        checkBahParameter();
+    </script>
+"""
+            html = fig.to_html()
+            html = html.replace("</body>", toggle_script + "</body>")
+            with open(save_path, "w") as f:
+                f.write(html)
+        else:
+            fig.write_html(save_path)
         print(f"Saved drawdown chart to {save_path}")
 
     return fig
