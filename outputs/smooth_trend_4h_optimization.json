@@ -1,0 +1,29 @@
+{
+  "best_params": {
+    "ema_fast": 76,
+    "ema_slow": 99,
+    "atr_multiplier_sl": 0.3948362544471561,
+    "atr_multiplier_tp": 3.3824022442762973,
+    "trail_multiplier": 0.772760384716562,
+    "rsi_period": 12,
+    "rsi_long_min": 26,
+    "rsi_long_max": 54,
+    "rsi_short_min": 32,
+    "rsi_short_max": 48,
+    "adx_threshold": 26,
+    "volume_multiplier": 0.901176152421429,
+    "pullback_threshold_pct": 0.01458716301014217,
+    "time_stop_bars": 15,
+    "position_size_pct": 0.6156191078604191
+  },
+  "best_objective": 1.665980949762189,
+  "n_trials": 200,
+  "final_metrics": {
+    "total_return": 22.702507273574195,
+    "sharpe_ratio": 3.028164734270151,
+    "max_drawdown": -1.8763089076496664,
+    "win_rate": 47.05882352941176,
+    "total_trades": 68,
+    "final_capital": 12270.25072735742
+  }
+}
